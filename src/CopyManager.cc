@@ -5,7 +5,7 @@
 namespace cp {
     
     // Buffer size for reading and writing
-    constexpr std::size_t BUFFER_SIZE = 131072;  // 128 KB
+    constexpr std::size_t BUFFER_SIZE = 4 * 1024 * 1024;  // 4 MB
 
     CopyManager::CopyManager(IDataSource::Ptr source, IDataDestination::Ptr destination)
         : source_(std::move(source))
