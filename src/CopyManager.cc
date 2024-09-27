@@ -1,10 +1,11 @@
 #include <iostream>
+#include <chrono>
 #include "CopyManager.h"
 
 namespace cp {
     
     // Buffer size for reading and writing
-    constexpr std::size_t BUFFER_SIZE = 65536;  // 64 KB
+    constexpr std::size_t BUFFER_SIZE = 131072;  // 128 KB
 
     CopyManager::CopyManager(IDataSource::Ptr source, IDataDestination::Ptr destination)
         : source_(std::move(source))
@@ -20,11 +21,7 @@ namespace cp {
                 read();
             } catch (const std::exception& ex) {
                 std::cerr << "Reader thread encountered an error: " << ex.what() << "\n";
-                {
-                    std::unique_lock<std::mutex> lock(mutex_);
-                    errorOccurred_ = true;
-                }
-                condVar_.notify_one();
+                notifyError();
             }
         });
 
@@ -59,15 +56,17 @@ namespace cp {
     }
 
     void CopyManager::write() {
-        while (!done_ or !queue_.empty() or !errorOccurred_) {
+        bool hasToWrite = true;
+        while (hasToWrite) {
             std::vector<char> buffer;
             std::size_t bytesToWrite = 0;
 
             {
                 std::unique_lock<std::mutex> lock(mutex_);
-                condVar_.wait(lock, [this] { return !queue_.empty() or done_ or errorOccurred_; });
+                condVar_.wait_for(lock, std::chrono::seconds(3), [this] { return !queue_.empty() or done_ or errorOccurred_; });
 
-                if ((queue_.empty() and done_) or errorOccurred_) break;
+                if ((queue_.empty() and done_) or errorOccurred_) hasToWrite = false;
+
 
                 if (!queue_.empty()) {
                     buffer = std::move(queue_.front());
@@ -80,6 +79,14 @@ namespace cp {
                 destination_->writeChunk(buffer, bytesToWrite);
             }
         }
+    }
+    
+    void CopyManager::notifyError() {
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            errorOccurred_ = true;
+        }
+        condVar_.notify_all();
     }
 
 } // namespace cp

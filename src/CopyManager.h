@@ -21,7 +21,10 @@ namespace cp {
         void read();
         void write();
 
+        void notifyError();
+        
     private:
+
         IDataSource::Ptr source_;
         IDataDestination::Ptr destination_;
         std::queue<std::vector<char>> queue_;

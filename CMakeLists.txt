@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Threads REQUIRED)
 
+add_compile_options("$<$<CXX_COMPILER_ID:GNU,Clang>:-O3;-flto>")
+
 add_subdirectory(src)
 
 option(BUILD_TESTS "Build tests" OFF)

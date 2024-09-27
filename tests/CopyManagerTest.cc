@@ -64,7 +64,7 @@ TEST_CASE("Test CopyManager functionality", "[CopyManager]") {
     }
 
     SECTION("Copy large file") {
-        createFile(sourceFilename, 1 * 1024 * 1024 * 20); // 20 MB file
+        createFile(sourceFilename, 1 * 1024 * 1024 * 1024); // 1 GB file
 
         auto source = std::make_unique<cp::FileSource>(sourceFilename);
         auto destination = std::make_unique<cp::FileDestination>(targetFilename);
@@ -106,7 +106,7 @@ TEST_CASE("Test CopyManager functionality", "[CopyManager]") {
 
     SECTION("Write permissions issue") {
         createFile(permissionFilename, 1024);
-        
+
         // Set the file as non-writable
         if (chmod(permissionFilename.c_str(), 0444) != 0) {
             FAIL("Failed to change file permissions");
