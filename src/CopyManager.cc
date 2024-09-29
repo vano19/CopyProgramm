@@ -10,6 +10,10 @@ namespace cp {
     CopyManager::CopyManager(IDataSource::Ptr source, IDataDestination::Ptr destination)
         : source_(std::move(source))
         , destination_(std::move(destination))
+        , queue_()
+        , bytesReadBuffer_()
+        , mutex_()
+        , condVar_()
         , done_(false)
         , errorOccurred_(false) {
 
@@ -21,7 +25,8 @@ namespace cp {
                 read();
             } catch (const std::exception& ex) {
                 std::cerr << "Reader thread encountered an error: " << ex.what() << "\n";
-                notifyError();
+                errorOccurred_.store(true, std::memory_order_release);
+                condVar_.notify_one();;
             }
         });
 
@@ -30,17 +35,18 @@ namespace cp {
                 write();
             } catch (const std::exception& ex) {
                 std::cerr << "Writer thread encountered an error: " << ex.what() << "\n";
+                errorOccurred_.store(true, std::memory_order_release);
             }
         });
     }
 
 
     void CopyManager::read() {
-        while (!done_ and !errorOccurred_) {
+        while (!done_.load(std::memory_order_relaxed) and !errorOccurred_.load(std::memory_order_acquire)) {
             std::vector<char> buffer(BUFFER_SIZE);
             std::size_t bytesRead = 0;
             if (!source_->readChunk(buffer, bytesRead)) {
-                done_ = true;
+                done_.store(true, std::memory_order_release);
                 condVar_.notify_one();
                 break;
             }
@@ -63,10 +69,13 @@ namespace cp {
 
             {
                 std::unique_lock<std::mutex> lock(mutex_);
-                condVar_.wait_for(lock, std::chrono::seconds(3), [this] { return !queue_.empty() or done_ or errorOccurred_; });
+                condVar_.wait_for(lock, 
+                    std::chrono::seconds(3), 
+                    [this] { return !queue_.empty() or done_.load(std::memory_order_acquire) or errorOccurred_.load(std::memory_order_acquire); });
 
-                if ((queue_.empty() and done_) or errorOccurred_) hasToWrite = false;
-
+                if ((queue_.empty() and done_.load(std::memory_order_relaxed)) or errorOccurred_.load(std::memory_order_relaxed)) {
+                    hasToWrite = false;
+                }
 
                 if (!queue_.empty()) {
                     buffer = std::move(queue_.front());
@@ -81,12 +90,4 @@ namespace cp {
         }
     }
     
-    void CopyManager::notifyError() {
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            errorOccurred_ = true;
-        }
-        condVar_.notify_all();
-    }
-
 } // namespace cp
