@@ -1,6 +1,5 @@
 #pragma once
 
-#include <thread>
 #include <condition_variable>
 #include <queue>
 #include <mutex>
@@ -26,14 +25,14 @@ namespace cp {
 
         IDataSource::Ptr source_;
         IDataDestination::Ptr destination_;
-        
-        std::queue<std::vector<char>> queue_;
-        std::queue<std::size_t> bytesReadBuffer_;
+        std::vector<std::vector<char>> buffers_;
+        std::vector<std::size_t> bytesRead_;
+        std::size_t readIndex_;
+        std::size_t writeIndex_;
         std::mutex mutex_;
         std::condition_variable condVar_;
-
-        alignas(std::hardware_destructive_interference_size) std::atomic<bool> done_;
-        alignas(std::hardware_destructive_interference_size) std::atomic<bool> errorOccurred_;
+        bool done_;
+        bool changeIndexes_;
     };
 
 } // namespace cp
