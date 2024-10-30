@@ -2,8 +2,8 @@
 
 namespace cp
 {
-    FileSource::FileSource(const std::string& filename) 
-        : file_(filename, std::ios::binary) {
+    FileSource::FileSource(std::string_view filename) 
+        : file_(filename.data(), std::ios::binary) {
         
         if (!file_) {
             throw std::runtime_error("Failed to open source file: " + filename);

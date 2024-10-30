@@ -1,10 +1,6 @@
 #pragma once
 
-#include <condition_variable>
-#include <queue>
-#include <mutex>
-#include <atomic>
-
+#include "IDataTransport.h"
 #include "IDataSource.h"
 #include "IDataDestination.h"
 
@@ -12,7 +8,10 @@ namespace cp {
 
     class CopyManager {
     public:
-        CopyManager(IDataSource::Ptr source, IDataDestination::Ptr destination);
+        CopyManager(
+            IDataSource::Ptr source, 
+            IDataDestination::Ptr destination,
+            IDataTransport::Ptr transport);
 
         void start();
 
@@ -25,14 +24,7 @@ namespace cp {
 
         IDataSource::Ptr source_;
         IDataDestination::Ptr destination_;
-        std::vector<std::vector<char>> buffers_;
-        std::vector<std::size_t> bytesRead_;
-        std::size_t readIndex_;
-        std::size_t writeIndex_;
-        std::mutex mutex_;
-        std::condition_variable condVar_;
-        bool done_;
-        bool changeIndexes_;
+        IDataTransport::Ptr transport_;
     };
 
 } // namespace cp

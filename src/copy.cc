@@ -2,21 +2,34 @@
 #include "CopyManager.h"
 #include "FileDestination.h"
 #include "FileSource.h"
+#include "SharedMemoryTransport.h"
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
+    if (argc != 4) {
         std::cerr << "Usage: "<< argv[0] << " <source file> <target file>\n";
         return 1;
     }
 
     try {
-        std::string sourceFilename = argv[1];
-        std::string targetFilename = argv[2];
+        std::string_view sourceFilename = argv[1];
+        std::string_view targetFilename = argv[2];
+        std::string_view sharedMemoryName = argv[3];
 
-        cp::IDataSource::Ptr source = std::make_unique<cp::FileSource>(sourceFilename);
-        cp::IDataDestination::Ptr destination = std::make_unique<cp::FileDestination>(targetFilename);
+        if (sourceFilename == targetFilename) {
+            std::cout << "Source and destination are the same. Exiting.\n";
+            return 0;
+        }
 
-        cp::CopyManager manager(std::move(source), std::move(destination));
+        cp::SharedMemoryTransport::Ptr transport = std::make_unique<cp::SharedMemoryTransport>(sharedMemoryName);
+        cp::IDataSource::Ptr source = nullptr;
+        cp::IDataDestination::Ptr destination = nullptr;
+        if (cp::EStrategy::E_Read == transport->strategy()) {
+            source = std::make_unique<cp::FileSource>(sourceFilename);
+        } else {
+           destination = std::make_unique<cp::FileDestination>(targetFilename);
+        }
+        
+        cp::CopyManager manager(std::move(source), std::move(destination), std::move(transport));
         manager.start();
 
         std::cout << "Copy operation completed successfully.\n";

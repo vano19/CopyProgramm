@@ -2,20 +2,20 @@
 
 namespace cp
 {
-    FileDestination::FileDestination(const std::string& filename) 
-        : file_(filename, std::ios::binary) {
+    FileDestination::FileDestination(std::string_view filename) 
+        : file_(filename.data(), std::ios::binary) {
         
         if (!file_) {
             throw std::runtime_error("Failed to open target file: " + filename);
         }
     }
 
-    void FileDestination::writeChunk(const std::vector<char>& buffer, std::size_t bytesToWrite) {
+    void FileDestination::writeChunk(std::span<char> buffer) {
         if (!file_) {
             throw std::runtime_error("Target file is not open");
         }
 
-        file_.write(buffer.data(), bytesToWrite);
+        file_.write(buffer.data(), buffer.size());
 
         if (!file_) {
             throw std::runtime_error("Failed to write to target file");

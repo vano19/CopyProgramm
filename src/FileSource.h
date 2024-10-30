@@ -8,7 +8,7 @@ namespace cp
     class FileSource : public IDataSource {
     public:
 
-        explicit FileSource(const std::string& filename);
+        explicit FileSource(std::string_view filename);
         bool readChunk(std::vector<char>& buffer, std::size_t& bytesRead) override;
 
     private:

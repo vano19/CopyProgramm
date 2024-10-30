@@ -8,8 +8,8 @@ namespace cp
     class FileDestination : public IDataDestination {
     public:
 
-        explicit FileDestination(const std::string& filename);
-        void writeChunk(const std::vector<char>& buffer, std::size_t bytesToWrite) override;
+        explicit FileDestination(std::string_view filename);
+        void writeChunk(std::span<char> buffer) override;
 
     private:
         std::ofstream file_;

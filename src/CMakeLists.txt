@@ -13,4 +13,4 @@ target_include_directories(CopyManager
 
 add_executable(copy copy.cc $<TARGET_OBJECTS:CopyManager>)
 
-target_link_libraries(copy PRIVATE Threads::Threads)
+target_link_libraries(copy PRIVATE boost::interprocess)
