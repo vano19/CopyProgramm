@@ -32,7 +32,9 @@ namespace cp {
     }
 
     void CopyManager::write() {
-        while(transport_->hasFinished()) {
+        std::cout << "run write" << std::endl;
+        while(!transport_->hasFinished()) {
+             std::cout << "read" << std::endl;
             std::span<char> buffer = transport_->receiveData();
             if (buffer.size() > 0)
                 destination_->writeChunk(buffer);

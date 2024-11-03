@@ -45,6 +45,8 @@ namespace cp {
         private:
             using SharedMemoryStructurePtr = std::unique_ptr<SharedMemoryStructure, std::function<void(SharedMemoryStructure*)>>;
             
+            void memoryInitialization();
+
             std::string sharedMemoryName_;
             const std::size_t bufferSize_;
             EStrategy strategy_;

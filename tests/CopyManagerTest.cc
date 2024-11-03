@@ -9,8 +9,11 @@
 #include "FileSource.h"
 #include "FileDestination.h"
 
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/wait.h>
+
+#include <iostream>
 
 namespace fs = std::filesystem;
 
@@ -47,18 +50,28 @@ bool compareFiles(const std::string& file1, const std::string& file2) {
     return std::equal(begin1, end, begin2);
 }
 
-int runProcess(const char* cmd, const char* arg1, const char* arg2) {
+int runProcess(const char* cmd, const char* source, const char* destination, const char* smname, const char* output) {
     pid_t pid = fork();
 
     if (pid == -1) {
-        std::cerr << "fork";
-        return -1;
+        throw std::runtime_error(std::string("Failed to fork: ") + strerror(errno));
     } else if (pid == 0) {
         // Child process
-        execlp(cmd, cmd, arg1, arg2, (char*)NULL);
-        // If execlp returns, it must have failed
-        std::cerr << "execlp";
-        return -1;
+        int fd = open(output, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd == -1) {
+            throw std::runtime_error(std::string("Failed to open file '") + output + "': " + strerror(errno));
+        }
+
+        // Redirect stdout and stderr to the file
+        if (dup2(fd, STDOUT_FILENO) == -1 || dup2(fd, STDERR_FILENO) == -1) {
+            close(fd); 
+            throw std::runtime_error(std::string("Failed to redirect stdout or stderr: ") + strerror(errno));
+        }
+
+        close(fd); 
+        execlp(cmd, cmd, source, destination, smname, (char*)NULL);
+        
+        throw std::runtime_error(std::string("Failed to execute '") + cmd + "': " + strerror(errno));
     } else {
         // Parent process
         return pid;
@@ -67,35 +80,29 @@ int runProcess(const char* cmd, const char* arg1, const char* arg2) {
 
 bool sharedMemoryLaunch(std::string_view source, std::string_view destination) {
     std::vector<pid_t> pids;
-    int status;
-    pid_t pid;
-
     // Start two processes
-    pids.push_back(runProcess("copy", source.data(), destination.data()));
-    pids.push_back(runProcess("customCP", source.data(), destination.data()));
+    pids.push_back(runProcess("/copy/build/src/copy", source.data(), destination.data(), "shared_mem", "/copy/build/process1.log"));
+    usleep(1000);
+    pids.push_back(runProcess("/copy/build/src/copy", source.data(), destination.data(), "shared_mem", "/copy/build/process2.log"));
 
     // Wait for processes to finish
     for (pid_t p : pids) {
+        int status = 0;
         if (waitpid(p, &status, 0) == -1) {
-            std::cerr << "waitpid";
-            return false;
+            throw std::runtime_error(std::string("waitpid is ") + strerror(errno));
         }
-
+        
         if (WIFEXITED(status)) {
             int exit_status = WEXITSTATUS(status);
-            std::cout << "Process " << p << " exited with status " << exit_status << std::endl;
             if (exit_status != 0) {
-                std::cerr << "Process " << p << " failed." << std::endl;
-                return false;
+                throw std::runtime_error("Process " + std::to_string(p) + " did not exit properly with " + std::to_string(exit_status));
             }
-        } else {
-            std::cerr << "Process " << p << " did not exit properly" << std::endl;
-            return false;
+        } else if (WIFSIGNALED(status)) {
+            int term_sig = WTERMSIG(status);
+            throw std::runtime_error("Process " + std::to_string(p) + " was terminated by signal " + std::to_string(term_sig));
         }
     }
-
-    std::cout << "All processes finished successfully" << std::endl;
-
+    
     return true;
 }
 
@@ -107,7 +114,7 @@ TEST_CASE("Test CopyManager functionality", "[CopyManager]") {
     SECTION("Copy small file") {
         createFile(sourceFilename, 1024); // 1 KB file
         {
-            REQUIRE(sharedMemoryLaunch(sourceFilename, targetFilename));
+            REQUIRE_NOTHROW(sharedMemoryLaunch(sourceFilename, targetFilename));
         }
 
         REQUIRE(fs::file_size(sourceFilename) == fs::file_size(targetFilename));
@@ -117,7 +124,7 @@ TEST_CASE("Test CopyManager functionality", "[CopyManager]") {
     SECTION("Copy large file") {
         createFile(sourceFilename, 1 * 1024 * 1024 * 1024); // 1 GB file
         {
-            REQUIRE(sharedMemoryLaunch(sourceFilename, targetFilename));
+            REQUIRE_NOTHROW(sharedMemoryLaunch(sourceFilename, targetFilename));
         }
 
         REQUIRE(fs::file_size(sourceFilename) == fs::file_size(targetFilename));
@@ -130,7 +137,7 @@ TEST_CASE("Test CopyManager functionality", "[CopyManager]") {
 
         createFile(sourceFilename, 0); // Empty file
         {
-            REQUIRE(sharedMemoryLaunch(sourceFilename, targetFilename));
+            REQUIRE_NOTHROW(sharedMemoryLaunch(sourceFilename, targetFilename));
         }
 
         REQUIRE(fs::file_size(sourceFilename) == fs::file_size(targetFilename));
@@ -142,7 +149,7 @@ TEST_CASE("Test CopyManager functionality", "[CopyManager]") {
         if (fs::exists(sourceFilename))
             REQUIRE(std::remove(sourceFilename.c_str()) == 0);
         {
-            REQUIRE(sharedMemoryLaunch("nonexistent.txt", targetFilename) == false);
+            REQUIRE_THROWS_AS(sharedMemoryLaunch("nonexistent.txt", targetFilename), std::runtime_error);
         }
     }
 
@@ -155,7 +162,7 @@ TEST_CASE("Test CopyManager functionality", "[CopyManager]") {
         }
 
         {
-            REQUIRE(sharedMemoryLaunch(permissionFilename, targetFilename) == false);
+            REQUIRE_NOTHROW(sharedMemoryLaunch(permissionFilename, targetFilename) == false);
         }
 
         // Cleanup: reset permissions and remove the file
