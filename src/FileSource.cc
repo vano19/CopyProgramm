@@ -6,7 +6,7 @@ namespace cp
         : file_(filename.data(), std::ios::binary) {
         
         if (!file_) {
-            throw std::runtime_error("Failed to open source file: " + filename);
+            throw std::runtime_error("Failed to open source file: " + std::string(filename));
         }
     }
 

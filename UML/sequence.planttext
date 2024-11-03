@@ -1,37 +1,48 @@
 @startuml
+actor Writer
+actor Reader
+participant "SharedMemoryTransport" as SMT
+participant "Shared Memory Structure" as SMS
 
-actor ReaderThread
-actor WriterThread
+== Initialization ==
+Writer -> SMT: instantiate(name, bufferSize)
+SMT -> SMS: access/create("SharedMemoryStructure")
+== Initialization - Lock ==
+SMS -> SMT: return rawPointer
 
-participant Source
-participant Buffer1
-participant Buffer2
-participant Destination
+== Initialization ==
+Reader -> SMT: instantiate(name, bufferSize)
+SMT -> SMS: access "SharedMemoryStructure"
 
-ReaderThread -> Source: readChunk()
-Source --> ReaderThread: data
+== Write Data ==
+Writer -> SMT: sendData(buffer)
+SMT -> SMS: acquire lock
+SMS -> SMS: wait until !dataReady
+SMT -> SMS: memcpy(data, buffer)
+SMT -> SMS: set dataReady true
+SMT -> SMS: notify_all
+SMT -> SMS: release lock
 
-alt Buffer1 is available
-    ReaderThread -> Buffer1: store data
-else Buffer2 is available
-    ReaderThread -> Buffer2: store data
-end
+== Read Data ==
+Reader -> SMT: receiveData()
+SMT -> SMS: acquire lock
+SMS -> SMS: wait until dataReady or finished
+SMT -> SMS: memcpy(localBuffer, data)
+SMT -> SMS: set dataReady false
+SMT -> SMS: notify_all
+SMT -> Reader: return localBuffer
+SMT -> SMS: release lock
 
-ReaderThread -> WriterThread: notify buffer full
+== Finish Communication ==
+Process -> SMT: finish()
+SMT -> SMS: acquire lock
+SMT -> SMS: setFinished(true)
+SMT -> SMS: notify_all
+SMT -> SMS: release lock
 
-alt Buffer1 contains data
-    WriterThread -> Buffer1: read data
-    WriterThread -> Destination: writeChunk()
-    WriterThread -> ReaderThread: notify buffer empty
-else Buffer2 contains data
-    WriterThread -> Buffer2: read data
-    WriterThread -> Destination: writeChunk()
-    WriterThread -> ReaderThread: notify buffer empty
-end
-
-alt Done reading or writing
-    ReaderThread -> WriterThread: done_
-    WriterThread -> ReaderThread: done_
-end
-
+== Cleanup ==
+Process -> SMT: destructor
+SMT -> SMS: acquire lock
+SMS -> SMS: check if active_process_count == 0
+SMT -> SMS: destroy SharedMemoryStructure
 @enduml

@@ -1,54 +1,51 @@
 #include "SharedMemoryTransport.h"
 
-#include <boost/interprocess/sync/interprocess_mutex.hpp>
-#include <boost/interprocess/sync/interprocess_condition.hpp>
+#include <stdexcept>
 
+#include <boost/interprocess/sync/scoped_lock.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 namespace cp {
 
     using namespace boost::interprocess;
-
-    struct SharedMemoryStructure {
-        interprocess_mutex mutex;
-        interprocess_condition condition;
-        int activeProcessCount;
-        size_t size;
-        // Placeholder for character array (file data)
-        char data[1]; // Flexible array member trick
-    };
     
-    SharedMemoryTransport::SharedMemoryTransport(std::string_view name, std::size buffer)
+    SharedMemoryTransport::SharedMemoryTransport(std::string_view name, std::size_t bufferSize)
         : sharedMemoryName_(name)
+        , bufferSize_(bufferSize)
         , strategy_(EStrategy::E_Read)
-        , segment_(open_or_create, sharedMemoryName_.c_str(), buffer + dataOffset + 1)
+        , segment_(std::make_shared<managed_shared_memory>(open_or_create, sharedMemoryName_.c_str(), bufferSize_ + dataOffset + 1))
         , sharedMemory_() {
-        
-        auto[rawPointer, size] = segment.find<SharedMemoryStructure>("SharedMemoryStructure");
-        
-        if (!rawPointer) {
-            rawPointer = segment.construct<SharedMemoryStructure>("SharedMemoryStructure")();
-            new (&rawPointer->mutex) interprocess_mutex;
-            new (&rawPointer->condition) interprocess_condition;
+        try {
+            auto [rawPointer, size] = segment_->find<SharedMemoryStructure>("SharedMemoryStructure");
+            
+            if (!rawPointer) {
+                rawPointer = segment_->construct<SharedMemoryStructure>("SharedMemoryStructure")();
+                new (&rawPointer->mutex) interprocess_mutex;
+                new (&rawPointer->condition) interprocess_condition;
 
-            rawPointer->finished = false;
-            rawPointer->dataReady = false;
-            rawPointer->size = 0;
-        }
-        
-        auto deleter = [this](SharedMemoryStructure* ptr) {
-            scoped_lock<interprocess_mutex> lock(ptr->mutex);
-            if (--ptr->active_process_count == 0) {
-                lock.unlock();
-                segment_.destroy<SharedMemoryStructure>("SharedMemoryStructure");
-                shared_memory_object::remove(sharedMemoryName_.c_str());
+                rawPointer->finished = false;
+                rawPointer->dataReady = false;
+                rawPointer->size = 0;
             }
-        };
+            
+            auto deleter = [segment = segment_, smName = sharedMemoryName_](SharedMemoryStructure* ptr) {
+                scoped_lock<interprocess_mutex> lock(ptr->mutex);
+                if (--ptr->activeProcessCount == 0) {
+                    lock.unlock();
+                    segment->destroy<SharedMemoryStructure>("SharedMemoryStructure");
+                    shared_memory_object::remove(smName.c_str());
+                }
+            };
+            sharedMemory_ = SharedMemoryStructurePtr(rawPointer, deleter);
 
-        sharedMemory_ = std::unique_ptr<SharedMemoryStructure, decltype(deleter)>(rawPointer, deleter);
+        } catch (const interprocess_exception& ex) {
+            shared_memory_object::remove(sharedMemoryName_.c_str());
+            throw;
+        }
 
         scoped_lock<interprocess_mutex> lock(sharedMemory_->mutex);
         if (sharedMemory_->activeProcessCount >= 2) {
-            throw std::runtime_error("Reading and Writer already exists");
+            throw std::runtime_error("Reader and Writer already exist");
         }
 
         ++sharedMemory_->activeProcessCount;
@@ -58,30 +55,34 @@ namespace cp {
             strategy_ = EStrategy::E_Write;
         }
     }
-
+    
     void SharedMemoryTransport::sendData(std::span<char> buffer) {
         scoped_lock<interprocess_mutex> lock(sharedMemory_->mutex);
-        while (sharedMemory_->dataReady) {
-            sharedMemory_->condition.wait(lock);
+
+        boost::posix_time::ptime timeout =boost::posix_time::second_clock::universal_time() + boost::posix_time::seconds(10);
+        if (!sharedMemory_->condition.timed_wait(lock, timeout, [this] { return !sharedMemory_->dataReady; })) {
+            throw std::runtime_error("Timeout waiting for data to be read");
         }
+        
     
         std::memcpy(sharedMemory_->data, buffer.data(), buffer.size());
-        sharedMemory->size = buffer.size();
+        sharedMemory_->size = buffer.size();
         sharedMemory_->dataReady = true;
         sharedMemory_->condition.notify_all();
     }
     
     std::span<char> SharedMemoryTransport::receiveData() {
         scoped_lock<interprocess_mutex> lock(sharedMemory_->mutex);
-        while (!sharedMemory_->dataReady and !sharedMemory_->finished) {
-            sharedMemory_->condition.wait(lock);
+        
+        boost::posix_time::ptime timeout = boost::posix_time::second_clock::universal_time() + boost::posix_time::seconds(10);
+        if (sharedMemory_->condition.timed_wait(lock, timeout, [this] { return sharedMemory_->dataReady or sharedMemory_->finished; })) {
+            throw std::runtime_error("Timeout waiting for data to be written");
         }
 
-        std::vector<char> localBuffer;
+        static std::vector<char> localBuffer(bufferSize_);
 
         if (sharedMemory_->dataReady) {
-            localBuffer.resize(dataSize);
-            std::memcpy(localBuffer.data(), sharedMemory->data, dataSize);
+            std::memcpy(localBuffer.data(), sharedMemory_->data, sharedMemory_->size);
             sharedMemory_->dataReady = false;
             sharedMemory_->condition.notify_all();
         }

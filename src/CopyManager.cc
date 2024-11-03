@@ -5,11 +5,9 @@
 
 namespace cp {
     
-    // Buffer size for reading and writing
-    constexpr std::size_t BUFFER_SIZE = 4 * 1024 * 1024;  // 4 MB
-
-    CopyManager::CopyManager(IDataSource::Ptr source, IDataDestination::Ptr destination, IDataTransport::Ptr transport)
-        : source_(std::move(source))
+    CopyManager::CopyManager(IDataSource::Ptr source, IDataDestination::Ptr destination, IDataTransport::Ptr transport, std::size_t bufferSize)
+        : bufferSize_(bufferSize)
+        , source_(std::move(source))
         , destination_(std::move(destination))
         , transport_(std::move(transport)) {
 
@@ -26,8 +24,8 @@ namespace cp {
 
     void CopyManager::read() {
         std::size_t bytesRead = 0;
-        std::vector<char> buffer(BUFFER_SIZE);
-        while(source->readChunk(buffer, bytesRead)) {
+        std::vector<char> buffer(bufferSize_);
+        while(source_->readChunk(buffer, bytesRead)) {
             transport_->sendData(std::span<char>{buffer.data(), bytesRead});
         }
         transport_->finish();

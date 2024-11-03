@@ -2,7 +2,7 @@ add_executable(CopyManagerTest CopyManagerTest.cc)
 target_link_libraries(CopyManagerTest 
     PRIVATE 
         Catch2::Catch2WithMain 
-        Threads::Threads
+        Boost
         $<TARGET_OBJECTS:CopyManager>
 )
 

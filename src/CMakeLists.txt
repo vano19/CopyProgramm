@@ -2,6 +2,7 @@ set(SRC_FILES
     CopyManager.cc
     FileSource.cc
     FileDestination.cc
+    SharedMemoryTransport.cc
 )
 
 add_library(CopyManager OBJECT ${SRC_FILES})
@@ -13,4 +14,4 @@ target_include_directories(CopyManager
 
 add_executable(copy copy.cc $<TARGET_OBJECTS:CopyManager>)
 
-target_link_libraries(copy PRIVATE boost::interprocess)
+target_link_libraries(copy PRIVATE ${Boost_LIBRARIES})

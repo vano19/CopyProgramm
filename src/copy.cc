@@ -4,6 +4,9 @@
 #include "FileSource.h"
 #include "SharedMemoryTransport.h"
 
+// Buffer size for reading and writing
+constexpr std::size_t BUFFER_SIZE = 4 * 1024 * 1024;  // 4 MB
+
 int main(int argc, char* argv[]) {
     if (argc != 4) {
         std::cerr << "Usage: "<< argv[0] << " <source file> <target file>\n";
@@ -20,7 +23,7 @@ int main(int argc, char* argv[]) {
             return 0;
         }
 
-        cp::SharedMemoryTransport::Ptr transport = std::make_unique<cp::SharedMemoryTransport>(sharedMemoryName);
+        cp::SharedMemoryTransport::Ptr transport = std::make_unique<cp::SharedMemoryTransport>(sharedMemoryName, BUFFER_SIZE);
         cp::IDataSource::Ptr source = nullptr;
         cp::IDataDestination::Ptr destination = nullptr;
         if (cp::EStrategy::E_Read == transport->strategy()) {
@@ -29,7 +32,7 @@ int main(int argc, char* argv[]) {
            destination = std::make_unique<cp::FileDestination>(targetFilename);
         }
         
-        cp::CopyManager manager(std::move(source), std::move(destination), std::move(transport));
+        cp::CopyManager manager(std::move(source), std::move(destination), std::move(transport), BUFFER_SIZE);
         manager.start();
 
         std::cout << "Copy operation completed successfully.\n";

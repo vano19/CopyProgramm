@@ -6,7 +6,7 @@ namespace cp
         : file_(filename.data(), std::ios::binary) {
         
         if (!file_) {
-            throw std::runtime_error("Failed to open target file: " + filename);
+            throw std::runtime_error("Failed to open target file: " + std::string(filename));
         }
     }
 
