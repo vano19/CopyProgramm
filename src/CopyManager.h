@@ -11,8 +11,7 @@ namespace cp {
         CopyManager(
             IDataSource::Ptr source, 
             IDataDestination::Ptr destination,
-            IDataTransport::Ptr transport,
-            std::size_t bufferSize);
+            IDataTransport::Ptr transport);
 
         void start();
 
@@ -22,7 +21,6 @@ namespace cp {
         void write();
 
     private:
-        const std::size_t bufferSize_;
         IDataSource::Ptr source_;
         IDataDestination::Ptr destination_;
         IDataTransport::Ptr transport_;

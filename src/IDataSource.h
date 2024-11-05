@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <span>
 #include <memory>
 
 namespace cp {
@@ -9,7 +9,7 @@ namespace cp {
     public:
         using Ptr = std::unique_ptr<IDataSource>;
 
-        virtual bool readChunk(std::vector<char>& buffer, std::size_t& bytesRead) = 0;
+        virtual bool readChunk(std::span<char> buffer, std::size_t& bytesRead) = 0;
         virtual ~IDataSource() = default;
     };
 

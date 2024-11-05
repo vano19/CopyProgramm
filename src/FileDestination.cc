@@ -10,7 +10,7 @@ namespace cp
         }
     }
 
-    void FileDestination::writeChunk(std::span<char> buffer) {
+    void FileDestination::writeChunk(std::span<const char> buffer) {
         if (!file_) {
             throw std::runtime_error("Target file is not open");
         }

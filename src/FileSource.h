@@ -9,7 +9,7 @@ namespace cp
     public:
 
         explicit FileSource(std::string_view filename);
-        bool readChunk(std::vector<char>& buffer, std::size_t& bytesRead) override;
+        bool readChunk(std::span<char> buffer, std::size_t& bytesRead) override;
 
     private:
         std::ifstream file_;

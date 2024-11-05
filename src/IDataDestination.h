@@ -9,7 +9,7 @@ namespace cp {
     public:
         using Ptr = std::unique_ptr<IDataDestination>;
 
-        virtual void writeChunk(std::span<char> buffer) = 0;
+        virtual void writeChunk(std::span<const char> buffer) = 0;
         virtual ~IDataDestination() = default;
     };
 

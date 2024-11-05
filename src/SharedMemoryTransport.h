@@ -1,12 +1,14 @@
 #pragma once
 
 #include "IDataTransport.h"
+#include "Constants.h"
 
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/sync/interprocess_mutex.hpp>
 #include <boost/interprocess/sync/interprocess_condition.hpp>
 
 #include <functional>
+
 namespace cp {
     
     enum class EStrategy {
@@ -18,21 +20,13 @@ namespace cp {
         public:
             using Ptr = std::unique_ptr<SharedMemoryTransport>;
 
-            struct SharedMemoryStructure {
-                boost::interprocess::interprocess_mutex mutex;
-                boost::interprocess::interprocess_condition condition;
-                int activeProcessCount;
-                bool finished;
-                bool dataReady;
-                size_t size;
-                char data[1];
-            };
-
-            SharedMemoryTransport(std::string_view name, std::size_t bufferSize);
+            SharedMemoryTransport(std::string_view name);
             virtual ~SharedMemoryTransport() = default;
 
-            void sendData(std::span<char> buffer) override;
-            std::span<char> receiveData() override;
+            std::span<char> getBuffer() override;
+
+            void sendData(std::span<const char> buffer) override;
+            std::span<const char> receiveData() override;
             
             bool hasFinished() override;
             void finish() override;
@@ -43,17 +37,28 @@ namespace cp {
             }
 
         private:
-            using SharedMemoryStructurePtr = std::unique_ptr<SharedMemoryStructure, std::function<void(SharedMemoryStructure*)>>;
             
             void memoryInitialization();
 
+            struct SharedMemoryStructure {
+                boost::interprocess::interprocess_mutex mutex;
+                boost::interprocess::interprocess_condition condition;
+                int activeProcessCount;
+                bool finished;
+                bool dataReady;
+                bool activeDataBlock; // false for data1, true for data2
+                size_t size1;
+                size_t size2;
+                char data1[BUFFER_SIZE] = {0};
+                char data2[BUFFER_SIZE] = {0};
+            };
+
+            using SharedMemoryStructurePtr = std::unique_ptr<SharedMemoryStructure, std::function<void(SharedMemoryStructure*)>>;
+
             std::string sharedMemoryName_;
-            const std::size_t bufferSize_;
             EStrategy strategy_;
             std::shared_ptr<boost::interprocess::managed_shared_memory> segment_;
             SharedMemoryStructurePtr sharedMemory_;
-
-            static constexpr std::size_t dataOffset = offsetof(SharedMemoryStructure, data);
     };
 
 

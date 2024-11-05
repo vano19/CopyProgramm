@@ -9,7 +9,7 @@ namespace cp
     public:
 
         explicit FileDestination(std::string_view filename);
-        void writeChunk(std::span<char> buffer) override;
+        void writeChunk(std::span<const char> buffer) override;
 
     private:
         std::ofstream file_;

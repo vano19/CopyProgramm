@@ -10,7 +10,7 @@ namespace cp
         }
     }
 
-    bool FileSource::readChunk(std::vector<char>& buffer, std::size_t& bytesRead) {
+    bool FileSource::readChunk(std::span<char> buffer, std::size_t& bytesRead) {
         if (!file_) return false;
 
         file_.read(buffer.data(), buffer.size());

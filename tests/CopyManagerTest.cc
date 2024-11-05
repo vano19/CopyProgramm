@@ -78,13 +78,14 @@ int runProcess(const char* cmd, const char* source, const char* destination, con
     }
 }
 
-bool sharedMemoryLaunch(std::string_view source, std::string_view destination) {
+bool sharedMemoryLaunch(std::string_view source, std::string_view destination, bool enableThird = false) {
     std::vector<pid_t> pids;
     // Start two processes
     pids.push_back(runProcess("/copy/build/src/copy", source.data(), destination.data(), "shared_mem", "/copy/build/process1.log"));
-    usleep(1000);
     pids.push_back(runProcess("/copy/build/src/copy", source.data(), destination.data(), "shared_mem", "/copy/build/process2.log"));
-
+    if (enableThird) {
+        pids.push_back(runProcess("/copy/build/src/copy", source.data(), destination.data(), "shared_mem", "/copy/build/process2.log"));
+    }    
     // Wait for processes to finish
     for (pid_t p : pids) {
         int status = 0;
@@ -162,12 +163,22 @@ TEST_CASE("Test CopyManager functionality", "[CopyManager]") {
         }
 
         {
-            REQUIRE_NOTHROW(sharedMemoryLaunch(permissionFilename, targetFilename) == false);
+            REQUIRE_THROWS_AS(sharedMemoryLaunch(permissionFilename, targetFilename), std::runtime_error);
         }
 
         // Cleanup: reset permissions and remove the file
         chmod(permissionFilename.c_str(), 0666);
         std::remove(permissionFilename.c_str());
+    }
+
+    SECTION("Copy small file with 3 proccesses") {
+        createFile(sourceFilename, 1024); // 1 KB file
+        {
+            REQUIRE_THROWS_AS(sharedMemoryLaunch(sourceFilename, targetFilename, true), std::runtime_error);
+        }
+
+        REQUIRE(fs::file_size(sourceFilename) == fs::file_size(targetFilename));
+        REQUIRE(compareFiles(sourceFilename, targetFilename));
     }
 
     // Clean up test files
