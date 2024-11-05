@@ -2,62 +2,63 @@
 
 ```mermaid
 sequenceDiagram
-    actor User
+    actor Reader
+    actor Writer
 
     participant SMT as SharedMemoryTransport
-    participant BL as Boost Library
-    participant SMS as SharedMemoryStructure
+    participant data1
+    participant data2
 
-    User ->> SMT: create SharedMemoryTransport
-    SMT ->> SMT: initialize shared memory
-    SMT ->> BL: create managed_shared_memory
-    activate BL
-    BL -->> SMT: managed_shared_memory
-    deactivate BL
-    SMT ->> SMT: memoryInitialization()
-    SMT ->> BL: named_mutex (create)
-    activate BL
-    BL -->> SMT: return lock
-    deactivate BL
-    SMT ->> SMT: segment_->find<SharedMemoryStructure>("SharedMemoryStructure")
-
-    alt SharedMemoryStructure not found
-      SMT ->> BL: segment_->construct<SharedMemoryStructure>("SharedMemoryStructure")
-      activate BL
-      BL -->> SMT: SharedMemoryStructure pointer
-      deactivate BL
-      SMT ->> SMT: Initialize SharedMemoryStructure
-    else
-      SMT ->> BL: use existing SharedMemoryStructure
+    opt Initialization
+        Reader ->> SMT: create SharedMemoryTransport
+        activate SMT
+        SMT ->> SMT: initialize shared memory
+        deactivate SMT
     end
 
-    User ->> SMT: getBuffer()
-    SMT ->> SMT: lock mutex
-    SMT ->> SMS: check if data is ready
-    SMS -->> SMT: not ready
-    SMT ->> SMS: get writable buffer [data1 or data2]
-    SMT -->> User: writable buffer
+    opt Writing Data
+        Writer ->> SMT: getBuffer()
+        activate SMT
+        SMT ->> SMT: lock mutex
+        SMT ->> SMT: check if data is ready
+        SMT ->> SMT: return data1 or data2 buffer
+        SMT -->> Writer: writable buffer
+        deactivate SMT
 
-    User ->> SMT: sendData(buffer)
-    SMT ->> SMT: lock mutex
-    SMT ->> SMS: write data to buffer
-    SMT ->> SMS: toggle active buffer
-    SMT ->> SMS: set dataReady to true
-    SMT ->> SMS: notify_all (condition)
+        Writer ->> SMT: sendData(buffer)
+        activate SMT
+        SMT ->> SMT: lock mutex
+        SMT ->> SMT: write data to data1 or data2
+        SMT ->> SMT: toggle active buffer
+        SMT ->> SMT: set dataReady to true
+        SMT ->> SMT: notify_all (condition)
+        deactivate SMT
+    end
 
-    User ->> SMT: receiveData()
-    SMT ->> SMT: lock mutex
-    SMT ->> SMS: check if data is ready
-    SMS -->> SMT: data ready
-    SMT ->> SMS: read data from buffer [data1 or data2]
-    SMT ->> SMS: toggle active buffer
-    SMT ->> SMS: set dataReady to false
-    SMT ->> SMS: notify_all (condition)
-    SMT -->> User: return data
+    opt Reading Data
+        Reader ->> SMT: receiveData()
+        activate SMT
+        SMT ->> SMT: lock mutex
+        SMT ->> SMT: check if data is ready
+        alt data is ready
+            SMT ->> SMT: read data from data1 or data2
+            SMT ->> SMT: toggle active buffer
+            SMT ->> SMT: set dataReady to false
+            SMT ->> SMT: notify_all (condition)
+            SMT -->> Reader: return data
+        else data is not ready
+            SMT ->> SMT: wait for data to be ready or finished
+        end
+        deactivate SMT
+    end
 
-    User ->> SMT: finish()
-    SMT ->> SMT: lock mutex
-    SMT ->> SMS: set finished to true
-    SMT ->> SMS: notify_all (condition)
-    SMT ->> SMS: wait for dataReady to be false
+    opt Marking Finished
+        Reader ->> SMT: finish()
+        activate SMT
+        SMT ->> SMT: lock mutex
+        SMT ->> SMT: set finished to true
+        SMT ->> SMT: notify_all (condition)
+        SMT ->> SMT: wait for dataReady to be false
+        deactivate SMT
+    end
 ```
